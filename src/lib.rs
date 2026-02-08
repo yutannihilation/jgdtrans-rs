@@ -190,6 +190,8 @@ pub(crate) fn fma(a: f64, b: f64, c: f64) -> f64 {
 #[cfg(feature = "geo-traits")]
 pub use geo_traits::CoordTrait;
 
+// Minimum subset of geo_traits::CoordTrait so that we can use CoordTrait
+// with or withou geo-traits.
 #[cfg(not(feature = "geo-traits"))]
 pub trait CoordTrait {
     type T;
