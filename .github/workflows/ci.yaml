@@ -44,6 +44,8 @@ jobs:
         run: cargo build
       - name: Test
         run: cargo test -F serde
+      - name: Test with geo-traits feature
+        run: cargo test -F geo-traits
   fma:
     strategy:
       matrix:
