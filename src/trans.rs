@@ -1108,6 +1108,9 @@ mod test {
     use super::*;
 
     mod test_transformer {
+        #[cfg(feature = "geo-traits")]
+        use std::str::FromStr;
+
         use super::*;
 
         const TKY2JGD: [(u32, (f64, f64, f64)); 7] = [
@@ -1281,6 +1284,30 @@ mod test {
                 tf.forward_corr_unchecked(&origin).unwrap(),
                 tf.forward_corr(&origin).unwrap()
             );
+        }
+
+        #[cfg(feature = "geo-traits")]
+        #[test]
+        fn test_accepts_wkt_coord_trait() {
+            let tf = TransformerBuilder::new()
+                .format(Format::SemiDynaEXE)
+                .parameters(SemiDynaEXE)
+                .build();
+
+            let wkt = wkt::Wkt::<f64>::from_str("POINT Z (140.08785504166664 36.103774791666666 2.34)")
+                .unwrap();
+            let point = match wkt {
+                wkt::Wkt::Point(point) => point,
+                _ => unreachable!(),
+            };
+            let coord = point.coord().unwrap();
+
+            let expected_origin = Point::new_unchecked(36.103774791666666, 140.08785504166664, 2.34);
+            let expected_forward = tf.forward(&expected_origin).unwrap();
+            let expected_forward_corr = tf.forward_corr(&expected_origin).unwrap();
+
+            assert_eq!(tf.forward(&coord).unwrap(), expected_forward);
+            assert_eq!(tf.forward_corr(&coord).unwrap(), expected_forward_corr);
         }
 
         #[test]
