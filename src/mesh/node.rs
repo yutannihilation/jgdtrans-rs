@@ -1,5 +1,5 @@
 use crate::mesh::{MeshCoord, MeshTryFromError, MeshUnit};
-use crate::Point;
+use crate::{CoordTrait, Point};
 
 /// Represents mesh node, a pair of [`MeshCoord`]s.
 ///
@@ -272,9 +272,12 @@ impl MeshNode {
     /// ```
     #[inline]
     #[must_use]
-    pub fn try_from_point(point: &Point, mesh_unit: &MeshUnit) -> Option<Self> {
-        let latitude = MeshCoord::try_from_latitude(&point.latitude, mesh_unit)?;
-        let longitude = MeshCoord::try_from_longitude(&point.longitude, mesh_unit)?;
+    pub fn try_from_point<C>(point: &C, mesh_unit: &MeshUnit) -> Option<Self>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        let latitude = MeshCoord::try_from_latitude(&point.y(), mesh_unit)?;
+        let longitude = MeshCoord::try_from_longitude(&point.x(), mesh_unit)?;
 
         Some(Self {
             latitude,

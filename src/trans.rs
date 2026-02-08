@@ -1,6 +1,8 @@
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
+use crate::CoordTrait;
+
 use crate::mesh::{MeshCell, MeshCode};
 use crate::{fma, Correction, MeshUnit, Parameter, ParameterSet, Point, Transformer};
 
@@ -93,6 +95,30 @@ impl<T> Transformer<T>
 where
     T: ParameterSet,
 {
+    #[inline]
+    fn point_from_coord<C>(point: &C) -> Point
+    where
+        C: CoordTrait<T = f64>,
+    {
+        Point::new_unchecked(point.y(), point.x(), point.nth(2).unwrap_or(0.0))
+    }
+
+    #[inline]
+    fn point_with_corr<C>(point: &C, corr: &Correction) -> Point
+    where
+        C: CoordTrait<T = f64>,
+    {
+        match point.nth(2) {
+            Some(z) => (
+                point.y() + corr.latitude,
+                point.x() + corr.longitude,
+                z + corr.altitude,
+            )
+                .into(),
+            None => (point.y() + corr.latitude, point.x() + corr.longitude).into(),
+        }
+    }
+
     /// Returns the forward-transformed position.
     ///
     /// # Errors
@@ -130,9 +156,12 @@ where
     /// assert_eq!(result, &point + tf.forward_corr(&point)?);
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
-    #[inline]
-    pub fn forward(&self, point: &Point) -> Result<Point> {
-        self.forward_corr(point).map(|corr| point + corr)
+    pub fn forward<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        self.forward_corr(point)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Returns the backward-transformed position compatible to the GIAJ web app/APIs.
@@ -176,8 +205,12 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn backward_compat(&self, point: &Point) -> Result<Point> {
-        self.backward_compat_corr(point).map(|corr| point + corr)
+    pub fn backward_compat<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        self.backward_compat_corr(point)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Returns the backward-transformed position.
@@ -230,8 +263,12 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn backward(&self, point: &Point) -> Result<Point> {
-        self.backward_corr(point).map(|corr| point + corr)
+    pub fn backward<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        self.backward_corr(point)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Unchecked forward-transformation.
@@ -279,8 +316,12 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn forward_unchecked(&self, point: &Point) -> Result<Point> {
-        self.forward_corr_unchecked(point).map(|corr| point + corr)
+    pub fn forward_unchecked<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        self.forward_corr_unchecked(point)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Unchecked backward-transformation compatible to the GIAJ web app/APIs.
@@ -328,9 +369,12 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn backward_compat_unchecked(&self, point: &Point) -> Result<Point> {
+    pub fn backward_compat_unchecked<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
         self.backward_compat_corr_unchecked(point)
-            .map(|corr| point + corr)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Unchecked backward-transformation.
@@ -378,8 +422,12 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn backward_unchecked(&self, point: &Point) -> Result<Point> {
-        self.backward_corr_unchecked(point).map(|corr| point + corr)
+    pub fn backward_unchecked<C>(&self, point: &C) -> Result<Point>
+    where
+        C: CoordTrait<T = f64>,
+    {
+        self.backward_corr_unchecked(point)
+            .map(|corr| Self::point_with_corr(point, &corr))
     }
 
     /// Return the correction of the forward-transformation.
@@ -425,7 +473,10 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn forward_corr(&self, point: &Point) -> Result<Correction> {
+    pub fn forward_corr<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         let cell =
             MeshCell::try_from_point(point, self.mesh_unit()).ok_or(TransformError::new_oob())?;
 
@@ -488,7 +539,10 @@ where
     /// assert_eq!(&origin + corr, tf.backward_compat(&origin)?);
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
-    pub fn backward_compat_corr(&self, point: &Point) -> Result<Correction> {
+    pub fn backward_compat_corr<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         const DELTA: f64 = 1. / 300.; // 12. / 3600.
 
         let corr = Correction {
@@ -497,10 +551,13 @@ where
             altitude: 0.0,
         };
 
-        let temporal = point + corr;
+        let temporal = Self::point_with_corr(point, &corr);
 
         let corr = self.forward_corr(&temporal)?;
-        let reference = point - corr;
+        let reference = Self::point_with_corr(
+            point,
+            &Correction::new(-corr.latitude, -corr.longitude, -corr.altitude),
+        );
 
         // actual correction
         let corr = self.forward_corr(&reference)?;
@@ -553,7 +610,10 @@ where
     /// assert_eq!(&origin + corr, tf.backward(&origin)?);
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
-    pub fn backward_corr(&self, point: &Point) -> Result<Correction> {
+    pub fn backward_corr<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         // Assume p as an origin of forward transformation,
         // and q (point) as a destination of it.
         // These satisfy,
@@ -587,7 +647,8 @@ where
         const SCALE: f64 = 3600.;
         const ITERATION: usize = 4;
 
-        let (mut yn, mut xn) = (point.latitude, point.longitude);
+        let (target_latitude, target_longitude) = (point.y(), point.x());
+        let (mut yn, mut xn) = (target_latitude, target_longitude);
 
         let mesh_unit = self.mesh_unit();
 
@@ -616,8 +677,8 @@ where
                 bilinear_interpol(sw.latitude, se.latitude, nw.latitude, ne.latitude, y, x) / SCALE;
 
             // f(x, y) of the newton method
-            let fx = point.longitude - (xn + corr_x);
-            let fy = point.latitude - (yn + corr_y);
+            let fx = target_longitude - (xn + corr_x);
+            let fy = target_latitude - (yn + corr_y);
 
             // which Jacobian
             // let fx_x = -1. - ((se.longitude - sw.longitude) * (1. - yn) + (ne.longitude - nw.longitude) * yn) / SCALE;
@@ -657,8 +718,8 @@ where
             let temp = Point::new_unchecked(yn, xn, 0.0);
             let corr = self.forward_corr_unchecked(&temp)?;
 
-            if (point.latitude - (yn + corr.latitude)).abs() < Self::MAX_ERROR
-                && (point.longitude - (xn + corr.longitude)).abs() < Self::MAX_ERROR
+            if (target_latitude - (yn + corr.latitude)).abs() < Self::MAX_ERROR
+                && (target_longitude - (xn + corr.longitude)).abs() < Self::MAX_ERROR
             {
                 return Ok(Correction {
                     latitude: -corr.latitude,
@@ -717,16 +778,20 @@ where
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
     #[inline]
-    pub fn forward_corr_unchecked(&self, point: &Point) -> Result<Correction> {
+    pub fn forward_corr_unchecked<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         let mesh_unit = self.mesh_unit();
+        let point = Self::point_from_coord(point);
 
-        let code = MeshCode::from_point(point, &mesh_unit);
+        let code = MeshCode::from_point(&point, &mesh_unit);
 
         // Interpolation
         let Params { sw, se, nw, ne } = Params::new_unchecked(self, &code, &mesh_unit)?;
 
         // y: latitude, x: longitude
-        let (y, x) = code.position(point, &mesh_unit);
+        let (y, x) = code.position(&point, &mesh_unit);
 
         const SCALE: f64 = 3600.;
 
@@ -787,7 +852,10 @@ where
     /// );
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
-    pub fn backward_compat_corr_unchecked(&self, point: &Point) -> Result<Correction> {
+    pub fn backward_compat_corr_unchecked<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         const DELTA: f64 = 1. / 300.; // 12. / 3600.
 
         let corr = Correction {
@@ -796,10 +864,13 @@ where
             altitude: 0.0,
         };
 
-        let temporal = point + corr;
+        let temporal = Self::point_with_corr(point, &corr);
 
         let corr = self.forward_corr_unchecked(&temporal)?;
-        let reference = point - corr;
+        let reference = Self::point_with_corr(
+            point,
+            &Correction::new(-corr.latitude, -corr.longitude, -corr.altitude),
+        );
 
         // actual correction
         let corr = self.forward_corr_unchecked(&reference)?;
@@ -854,14 +925,18 @@ where
     /// );
     /// # Ok::<(), Box<dyn Error>>(())
     /// ```
-    pub fn backward_corr_unchecked(&self, point: &Point) -> Result<Correction> {
+    pub fn backward_corr_unchecked<C>(&self, point: &C) -> Result<Correction>
+    where
+        C: CoordTrait<T = f64>,
+    {
         // See backward_corr for detail
         let mesh_unit = self.mesh_unit();
 
         const SCALE: f64 = 3600.;
         const ITERATION: usize = 4;
 
-        let (mut yn, mut xn) = (point.latitude, point.longitude);
+        let (target_latitude, target_longitude) = (point.y(), point.x());
+        let (mut yn, mut xn) = (target_latitude, target_longitude);
 
         for _ in 0..ITERATION {
             let current = Point::new_unchecked(yn, xn, 0.0);
@@ -879,8 +954,8 @@ where
                 bilinear_interpol(sw.latitude, se.latitude, nw.latitude, ne.latitude, y, x) / SCALE;
 
             // f(x, y) of the newton method
-            let fx = point.longitude - (xn + corr_x);
-            let fy = point.latitude - (yn + corr_y);
+            let fx = target_longitude - (xn + corr_x);
+            let fy = target_latitude - (yn + corr_y);
 
             // which Jacobian
             // let fx_x = -1. - ((se.longitude - sw.longitude) * (1. - yn) + (ne.longitude - nw.longitude) * yn) / SCALE;
@@ -920,8 +995,8 @@ where
             let temp = Point::new_unchecked(yn, xn, 0.0);
             let corr = self.forward_corr_unchecked(&temp)?;
 
-            if (point.latitude - (yn + corr.latitude)).abs() < Self::MAX_ERROR
-                && (point.longitude - (xn + corr.longitude)).abs() < Self::MAX_ERROR
+            if (target_latitude - (yn + corr.latitude)).abs() < Self::MAX_ERROR
+                && (target_longitude - (xn + corr.longitude)).abs() < Self::MAX_ERROR
             {
                 return Ok(Correction {
                     latitude: -corr.latitude,

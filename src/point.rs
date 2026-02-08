@@ -2,7 +2,11 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use crate::mesh::{MeshCell, MeshNode, MeshUnit};
+#[cfg(not(feature = "geo-traits"))]
+use crate::CoordTrait;
 use crate::Correction;
+#[cfg(feature = "geo-traits")]
+use geo_traits::{CoordTrait as GeoCoordTrait, Dimensions};
 
 /// Returns the normalized latitude into -90.0 <= and <= 90.0.
 #[inline(always)]
@@ -435,9 +439,121 @@ impl Point {
     }
 }
 
+#[cfg(feature = "geo-traits")]
+impl GeoCoordTrait for Point {
+    type T = f64;
+
+    #[inline]
+    fn dim(&self) -> Dimensions {
+        Dimensions::Xyz
+    }
+
+    #[inline]
+    fn nth_or_panic(&self, n: usize) -> Self::T {
+        match n {
+            0 => self.x(),
+            1 => self.y(),
+            2 => self.altitude,
+            _ => panic!("Point only supports 3 dimensions"),
+        }
+    }
+
+    #[inline]
+    fn x(&self) -> Self::T {
+        self.longitude
+    }
+
+    #[inline]
+    fn y(&self) -> Self::T {
+        self.latitude
+    }
+}
+
+#[cfg(feature = "geo-traits")]
+impl GeoCoordTrait for &Point {
+    type T = f64;
+
+    #[inline]
+    fn dim(&self) -> Dimensions {
+        Dimensions::Xyz
+    }
+
+    #[inline]
+    fn nth_or_panic(&self, n: usize) -> Self::T {
+        match n {
+            0 => self.x(),
+            1 => self.y(),
+            2 => self.altitude,
+            _ => panic!("Point only supports 3 dimensions"),
+        }
+    }
+
+    #[inline]
+    fn x(&self) -> Self::T {
+        self.longitude
+    }
+
+    #[inline]
+    fn y(&self) -> Self::T {
+        self.latitude
+    }
+}
+
+#[cfg(not(feature = "geo-traits"))]
+impl CoordTrait for Point {
+    type T = f64;
+
+    #[inline]
+    fn nth(&self, n: usize) -> Option<Self::T> {
+        match n {
+            0 => Some(self.x()),
+            1 => Some(self.y()),
+            2 => Some(self.altitude),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn x(&self) -> Self::T {
+        self.longitude
+    }
+
+    #[inline]
+    fn y(&self) -> Self::T {
+        self.latitude
+    }
+}
+
+#[cfg(not(feature = "geo-traits"))]
+impl CoordTrait for &Point {
+    type T = f64;
+
+    #[inline]
+    fn nth(&self, n: usize) -> Option<Self::T> {
+        match n {
+            0 => Some(self.x()),
+            1 => Some(self.y()),
+            2 => Some(self.altitude),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    fn x(&self) -> Self::T {
+        self.longitude
+    }
+
+    #[inline]
+    fn y(&self) -> Self::T {
+        self.latitude
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+    #[cfg(feature = "geo-traits")]
+    use geo_traits::{CoordTrait, Dimensions};
 
     #[test]
     fn test_normalize() {
@@ -501,5 +617,19 @@ mod test {
         assert!(actual.latitude.is_nan());
         assert!(actual.longitude.is_nan());
         assert!(actual.altitude.is_nan());
+    }
+
+    #[cfg(feature = "geo-traits")]
+    #[test]
+    fn test_coord_trait() {
+        let point = Point::new_unchecked(36.1, 140.0875, 12.34);
+
+        assert_eq!(CoordTrait::dim(&point), Dimensions::Xyz);
+        assert_eq!(CoordTrait::x(&point), 140.0875);
+        assert_eq!(CoordTrait::y(&point), 36.1);
+        assert_eq!(CoordTrait::nth(&point, 0), Some(140.0875));
+        assert_eq!(CoordTrait::nth(&point, 1), Some(36.1));
+        assert_eq!(CoordTrait::nth(&point, 2), Some(12.34));
+        assert_eq!(CoordTrait::nth(&point, 3), None);
     }
 }

@@ -1,5 +1,5 @@
 use crate::mesh::{MeshCoord, MeshNode, MeshUnit};
-use crate::Point;
+use crate::CoordTrait;
 
 /// Represents unit mesh cell, a quadruplet of [`MeshNode`]s and [`MeshUnit`].
 ///
@@ -408,7 +408,10 @@ impl MeshCell {
     /// ```
     #[inline]
     #[must_use]
-    pub fn try_from_point(point: &Point, mesh_unit: MeshUnit) -> Option<Self> {
+    pub fn try_from_point<C>(point: &C, mesh_unit: MeshUnit) -> Option<Self>
+    where
+        C: CoordTrait<T = f64>,
+    {
         MeshNode::try_from_point(point, &mesh_unit)
             .and_then(|node| Self::try_from_node(node, mesh_unit))
     }
@@ -480,9 +483,12 @@ impl MeshCell {
     /// ```
     #[inline]
     #[must_use]
-    pub fn position(&self, point: &Point) -> (f64, f64) {
-        let x = point.longitude - self.south_west.longitude.to_longitude();
-        let y = point.latitude - self.south_west.latitude.to_latitude();
+    pub fn position<C>(&self, point: &C) -> (f64, f64)
+    where
+        C: CoordTrait<T = f64>,
+    {
+        let x = point.x() - self.south_west.longitude.to_longitude();
+        let y = point.y() - self.south_west.latitude.to_latitude();
 
         match self.mesh_unit {
             MeshUnit::One => (120. * y, 80. * x),
@@ -514,6 +520,7 @@ impl Clone for MeshCell {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::Point;
 
     #[test]
     fn test_try_new() {

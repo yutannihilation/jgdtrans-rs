@@ -186,3 +186,15 @@ pub(crate) fn fma(a: f64, b: f64, c: f64) -> f64 {
         a * b + c
     }
 }
+
+#[cfg(feature = "geo-traits")]
+pub use geo_traits::CoordTrait;
+
+#[cfg(not(feature = "geo-traits"))]
+pub trait CoordTrait {
+    type T;
+
+    fn x(&self) -> Self::T;
+    fn y(&self) -> Self::T;
+    fn nth(&self, n: usize) -> Option<Self::T>;
+}
